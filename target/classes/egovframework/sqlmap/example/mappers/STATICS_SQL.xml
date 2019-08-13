@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.admin.statics.service.impl.StaticsMapper">
+
+	<select id="selectStaticsMapService" resultType="egovmap">
+	/**[STATICS_SQL.xml][egovframework.example.admin.statics.service.impl.StaticsMapper][통계정보][YEJI] */
+	
+	<![CDATA[
+		SELECT SUM(MBR_FINISHDT < CURDATE()) AS END,
+			SUM( MBR_FINISHDT > DATE_ADD(CURDATE(), INTERVAL 5 DAY))AS NORMAL ,
+	  		 SUM(MBR_FINISHDT <= DATE_ADD(CURDATE(), INTERVAL 5 DAY))AS ALMOST,
+	 ]]>
+			COUNT(*) AS MBR_CNT,
+            SUM(MBR_PT_CNT >0) PTMBR,
+            (SELECT COUNT(*) FROM t_trainer) AS TCNT
+		FROM T_MEMBER
+	 
+	</select>
+
+	
+</mapper>

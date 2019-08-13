@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.admin.schedule.service.impl.ScheduleMapper">
+
+	<!-- 이번달 모든 일정 -->
+	<select id="selectScheduleServiceList" parameterType="HashMap" resultType="egovmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][일정목록][YEJI] */
+			SELECT CC.*
+			FROM (	
+				SELECT  BB.*
+					  , FLOOR((BB.RNUM - 1) / #{rowCnt}) +1 AS PAGE_NUMBER
+				FROM(
+					SELECT AA.*
+						  , @ROWNUM := @ROWNUM + 1 AS RNUM
+				  	FROM(
+							SELECT  MNG_NO
+								  , MBR_ID
+								  , MBR_NM
+								  , DATE_FORMAT(START_DTM ,'%Y-%m-%d %p %h시 %i분') AS WORK_START_TM
+								  , DATE_FORMAT( DATE_ADD(START_DTM, INTERVAL PT_CODE MINUTE) ,'%Y-%m-%d %p %h시 %i분') AS WORK_FINISH_TM
+								  , TR_ID
+								  , TR_NM
+								  , PT_CODE
+							<![CDATA[
+								  , CASE WHEN DATE_ADD(START_DTM, INTERVAL PT_CODE MINUTE) > CURRENT_TIMESTAMP AND START_DTM <= CURRENT_TIMESTAMP THEN '진행중'
+								  		 WHEN DATE_ADD(START_DTM, INTERVAL PT_CODE MINUTE) <= CURRENT_TIMESTAMP THEN '종료'
+								  		 WHEN START_DTM > CURRENT_TIMESTAMP THEN '예정'
+								  	END STATUS 
+							]]>
+							FROM   t_class_schedule
+								  , (SELECT @ROWNUM := 0) AS RNUM
+							ORDER BY MODIFY_DTM DESC
+						) AA
+				 ) BB
+			) CC WHERE PAGE_NUMBER = #{currPage};
+	</select>
+
+
+	<select id="selectScheduleCntServiceList" parameterType="Hashmap" resultType="String">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][회원목록갯수][YEJI] */
+
+			SELECT COUNT(*)
+			FROM  t_class_schedule			
+	 
+	</select>
+	
+	<select id="selectPtLeftMbrListServiceList"  parameterType="String" resultType="String" >
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][pt횟수남은회원][YEJI] */
+
+			SELECT MBR_PT_CNT 
+			FROM  T_MEMBER
+			WHERE MBR_ID = #{mbrId};	
+	 
+	</select>
+	
+	<select id="selectTrainerInfoServiceList" resultType="egovmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][현재있는트레이너정보][YEJI] */
+
+			SELECT TR_ID
+				 , TR_NM
+				 , DATE_FORMAT(WORK_START_TM ,'%p %h시 %i분') AS WORK_START_TM
+				 , DATE_FORMAT(WORK_FINISH_TM ,'%p %h시 %i분') AS WORK_FINISH_TM
+			FROM  t_trainer;	
+	 
+	</select>
+	
+	<!-- pt를 할 날짜와 트레이너근무시간을 합친다  -->
+	<!-- 근무종료시간이 근무시작시간보다 작다면 1일을 추가한다.  -->
+	<select id="selectTrainerWorkTime" parameterType="map" resultType="hashmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][트레이너의 근무시간][YEJI] */
+			
+			<![CDATA[
+			select 
+				CONCAT(#{addSchDate}, ' ',WORK_START_TM) AS WORK_START_TM
+				,IF(WORK_START_TM < WORK_FINISH_TM, 
+				    CONCAT(#{addSchDate}, ' ', WORK_FINISH_TM),
+				    CONCAT( ADDDATE(#{addSchDate}, INTERVAL 1 DAY), ' ', WORK_FINISH_TM)
+				    ) AS WORK_FINISH_TM
+			]]>
+			from t_trainer 
+			where TR_ID = #{trainerPick};
+			 
+	</select>
+	
+	<select id="selectMemberClass" parameterType="map" resultType="hashmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][특정회원의근무시간안에배정된 일정][YEJI] */
+		
+			<![CDATA[
+			SELECT  
+				MNG_NO,  
+				MBR_ID,  
+				MBR_NM,  
+				TR_ID,  
+				TR_NM,  
+				PT_CODE,  
+				START_DTM,
+				FINISH_DTM
+			FROM t_class_schedule
+			WHERE MBR_ID = #{mbrId}
+			AND START_DTM >= #{workStartTm}
+			AND START_DTM < #{workFinishTm};
+			
+			]]>		
+					 
+	</select> 
+	
+	<!-- 배정된 일정이 근무시간에 걸친 회원 일정 -->
+	<!-- 수업종료시간 - 근무시작시간 / 수업종료가 근무시간안에 있음 종료시간 기준-->
+	<select id="selectMemberOutClass" parameterType="map" resultType="hashmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][특정회원의근무시간에걸쳐배정된 일정][YEJI] */
+		
+			<![CDATA[
+			SELECT  
+				MNG_NO,  
+				MBR_ID,  
+				MBR_NM,  
+				TR_ID,  
+				TR_NM,  
+				TIME_TO_SEC(TIMEDIFF(FINISH_DTM, #{workStartTm})) DIV 60 as PT_CODE,  
+				START_DTM,
+				FINISH_DTM
+			FROM t_class_schedule
+			WHERE MBR_ID = #{mbrId}
+			AND FINISH_DTM > #{workStartTm}
+			AND FINISH_DTM <= #{workFinishTm}
+			AND START_DTM < #{workStartTm};
+			]]>		
+					 
+	</select>
+	
+	<!-- 근무시간 안의 트레이너 일정뽑기-->
+	<!-- 트레이너는 근무시간 안에서만 일정이 배정된다.-->
+	<select id="selectTrainerClass" parameterType="map" resultType="hashmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][특정트레이너의배정된일정][YEJI] */
+			
+			<![CDATA[
+			SELECT  
+				MNG_NO,  
+				MBR_ID,  
+				MBR_NM,  
+				TR_ID,  
+				TR_NM,  
+				PT_CODE,  
+				START_DTM,
+				FINISH_DTM
+			FROM t_class_schedule
+			WHERE TR_ID = #{trainerPick}
+			AND START_DTM >= #{workStartTm}
+			AND START_DTM < #{workFinishTm};
+			
+			]]>		
+					 
+	</select>
+	
+	<!-- 일정테이블에서 관리 번호에 해당하는 회원id를 먼저 뽑아온다. -->
+	<update id="mbrPtCntPlus" parameterType="hashmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][회원PT횟수1증가][YEJI] */
+		<selectKey keyProperty="mid" resultType="int" order="BEFORE">
+   				 SELECT MBR_ID 
+   				 FROM   t_class_schedule 
+   				 WHERE  MNG_NO = #{mngNo}
+  		</selectKey>
+  		
+  		UPDATE T_MEMBER
+  		SET MBR_PT_CNT = MBR_PT_CNT + 1
+  		WHERE MBR_ID = #{mid};
+  		
+	</update>
+	
+	<delete id="deleteSchedule" parameterType="String">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][일정삭제][YEJI] */
+		
+		DELETE FROM t_class_schedule
+		WHERE MNG_NO = #{mngNo}
+		
+	</delete>
+	
+	<update id="updateDailyLogService" parameterType="Map">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][수업일지수정][YEJI] */
+	 	
+	 	UPDATE t_class_schedule
+	 	SET DAILY_LOG = #{dailyLog}
+	 	WHERE MNG_NO = #{mngNo}
+	 	
+	</update>
+	
+	<!-- or을 쓰는 대신 union을 쓴다. 일시들은 index키를 가지고 있다. -->
+	<!-- 트레이너 휴식시간 10분보장을 위해 끝나는 시간에 10분을 더한다 -->
+	<select id="selectChkPickDTService" parameterType="map" resultType="hashmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][등록을원하는 시간대 체크][YEJI] */
+			
+			<![CDATA[
+			SELECT  
+				MNG_NO
+				,MBR_ID
+				,TR_ID
+				,START_DTM
+				,FINISH_DTM
+			FROM t_class_schedule
+			WHERE TR_ID = #{trainerPick}
+			AND  ( DATE_SUB(#{chkPickDT}, INTERVAL 10 MINUTE) <= START_DTM 
+			AND START_DTM < DATE_ADD(#{chkPickDT}, INTERVAL #{ptCode}+10 MINUTE))
+			UNION 
+			SELECT  
+				MNG_NO
+				,MBR_ID
+				,TR_ID
+				,START_DTM
+				,FINISH_DTM
+			FROM t_class_schedule
+			WHERE TR_ID = #{trainerPick}
+			AND (DATE_SUB(#{chkPickDT}, INTERVAL 10 MINUTE) < FINISH_DTM 
+			AND FINISH_DTM <= DATE_ADD(#{chkPickDT}, INTERVAL #{ptCode}+10 MINUTE))
+			 UNION
+				SELECT  
+				MNG_NO
+				,MBR_ID
+				,TR_ID
+				,START_DTM
+				,FINISH_DTM
+			FROM t_class_schedule
+			WHERE MBR_ID= #{mbrId}
+			AND  ( DATE_SUB(#{chkPickDT}, INTERVAL 10 MINUTE) <= START_DTM 
+			AND START_DTM < DATE_ADD(#{chkPickDT}, INTERVAL #{ptCode}+10 MINUTE))
+            UNION
+				SELECT  
+				MNG_NO
+				,MBR_ID
+				,TR_ID
+				,START_DTM
+				,FINISH_DTM
+			FROM t_class_schedule
+			WHERE MBR_ID= #{mbrId}
+			AND  ( DATE_SUB(#{chkPickDT}, INTERVAL 10 MINUTE) <= FINISH_DTM 
+			AND FINISH_DTM < DATE_ADD(#{chkPickDT}, INTERVAL #{ptCode}+10 MINUTE))
+			]]>		
+					 
+	</select>
+	
+	<insert id="insertNewClass" parameterType="Hashmap">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][일정등록][YEJI] */
+			INSERT INTO T_CLASS_SCHEDULE 
+				(
+					MBR_ID
+					, MBR_NM
+					, TR_ID
+					, TR_NM
+					, PT_CODE
+					, START_DTM
+					, FINISH_DTM
+					, REG_DTM
+				) 
+			VALUES 
+				(
+					#{mbrId}
+					, (SELECT MBR_NM FROM T_MEMBER WHERE MBR_ID = #{mbrId} ) 
+					, #{trId}
+					, (SELECT TR_NM FROM T_TRAINER WHERE TR_ID = #{trId})
+					, #{ptCode}
+					, #{chkPickDT}
+					, (SELECT DATE_ADD(#{chkPickDT}, INTERVAL #{ptCode} MINUTE))
+					, NOW()
+				);
+
+	</insert>
+	
+	<update id="updateMbrPtCnt" parameterType="String">
+	/**[SCHEDULE_SQL.xml][egovframework.example.admin.schedule.service.impl.ScheduleMapper][회원pt횟수감소][YEJI] */
+	 	
+	 	UPDATE t_member
+	 	SET MBR_PT_CNT = MBR_PT_CNT -1
+	 	WHERE MBR_ID = #{mbrId}
+	 	
+	</update>
+	
+</mapper>

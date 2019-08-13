@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.admin.trainer.service.impl.TrainerMapper">
+
+	<!-- 조건을 걸고 그 조건에 맞는 트레이너목록을 최신수정트레이너순으로 정렬하고  해당 페이지의 해당하는 트레이너목록 추출   -->
+	<select id="SelectTrainerServiceList" parameterType="hashmap" resultType="egovmap">
+	/**[TRAINER_SQL.XML][egovframework.example.admin.trainer.service.impl.TrainerMapper][트레이너목록][YEJI] */
+			SELECT CC.*
+			FROM (	
+				SELECT  BB.*
+					  , FLOOR((BB.RNUM - 1) / #{rowCnt}) +1 AS PAGE_NUMBER
+				FROM(
+					SELECT AA.*
+						  , @ROWNUM := @ROWNUM + 1 AS RNUM
+						  <![CDATA[
+						  ,(SELECT COUNT(*)
+							FROM t_class_schedule
+							WHERE TR_ID = AA.TR_ID
+							AND FINISH_DTM < CURRENT_TIMESTAMP)  AS TOTCNT
+					      , (SELECT SUM(START_DTM > NOW()) 
+							FROM t_class_schedule
+						  ]]>
+							WHERE TR_ID = AA.TR_ID)  AS FUTURE
+				  	FROM(
+							SELECT  TR_ID
+								  , TR_NM
+								  , DATE_FORMAT(WORK_START_TM ,'%p %h시 %i분') AS WORK_START_TM
+								  , DATE_FORMAT(WORK_FINISH_TM ,'%p %h시 %i분') AS WORK_FINISH_TM
+								  , TR_GENDER
+							FROM   t_trainer
+								  , (SELECT @ROWNUM := 0) AS RNUM
+							WHERE  1=1
+							<choose>
+							    <when test='searchCon == "1" and searchText != ""'>
+							      AND TR_ID = #{searchText}
+							    </when>
+							    <when test='searchCon == "2" and searchText != ""'>
+							      AND TR_NM = #{searchText}
+							    </when>
+							</choose>
+							GROUP  BY TR_ID
+							ORDER BY MODIFY_DTM DESC
+						) AA
+				 ) BB
+			) CC WHERE PAGE_NUMBER = #{currPage};
+	</select>
+
+
+	<select id="SelectTrainerCntServiceList" parameterType="hashmap" resultType="String">
+	/**[TRAINER_SQL.XML][egovframework.example.admin.trainer.service.impl.TrainerMapper][트레이너목록갯수][YEJI] */
+	
+			SELECT COUNT(*)
+			FROM(
+					SELECT TR_ID
+					FROM   t_trainer
+					WHERE  1=1
+					<choose>
+					    <when test='searchCon == "1"'>
+					      AND TR_ID = #{searchText}
+					    </when>
+					    <when test='searchCon == "2"'>
+					      AND TR_NM = #{searchText}
+					    </when>
+					</choose>
+					GROUP  BY TR_ID
+			) AA				
+	 
+	</select>
+	
+	
+	<insert id="insertTrainerInfo" parameterType="hashmap">
+	/**[TRAINER_SQL.XML][egovframework.example.admin.trainer.service.impl.TrainerMapper][트레이너등록][YEJI] */
+			
+			INSERT   INTO   T_TRAINER
+			(
+			   TR_NM
+			 , WORK_START_TM
+			 , WORK_FINISH_TM
+			 , TR_GENDER
+			 , TR_CELLNO
+			 , REG_DTM
+			 , MODIFY_DTM
+			 <if test="post != null">
+			 , TR_POST_CODE
+			 , TR_ROAD_ADDRESS
+			 </if>
+			 <if test="detailAddress != null">
+			 , TR_DTL_ADDRESS
+			 </if>
+			)
+			VALUES
+			(
+			   #{tNm}
+			 , #{sTime}
+			 , #{fTime}
+			 , #{gender}
+			 , #{phone_number}
+			 , now()
+			 , now()
+			<if test="post != null">
+			 , #{post}
+			 , #{RoadAddress}
+			</if>
+			<if test="detailAddress != null">
+			 , #{detailAddress}
+			</if>
+			
+			)
+	</insert>
+	
+	<!-- 가장 최근에 등록된 회원의 Id를 가져온다 -->
+	<select id="selectLastRegTrainerId" resultType="String">
+	/**[TRAINER_SQL.XML][egovframework.example.admin.trainer.service.impl.TrainerMapper][최근에 등록된 트레이너ID][YEJI] */
+			 SELECT TR_ID 
+   			 FROM T_TRAINER 
+   			 WHERE REG_DTM = (SELECT MAX(REG_DTM)
+			 FROM T_TRAINER)
+	</select>
+	
+	<delete  id="trainerDelete" parameterType="String" >
+	/**[TRAINER_SQL.XML][egovframework.example.admin.trainer.service.impl.TrainerMapper][트레이너삭제][YEJI] */
+	
+		DELETE FROM T_TRAINER
+		WHERE TR_ID = #{tId}	
+	</delete >
+	
+	<!-- 일정관리테이블에서 총회수를 뽑아서 트레이너의 상세정보와 함께 가져온다 -->
+	<select id="selectTrainerInfo" parameterType="String" resultType="EgovMap">
+	/**[TRAINER_SQL.XML][egovframework.example.admin.trainer.service.impl.TrainerMapper][트레이너상세정보][YEJI] */
+	
+		SELECT   TR_ID
+				,TR_NM
+				,DATE_FORMAT(WORK_START_TM ,'%p %h시 %i분') AS WORK_START_TM
+				,DATE_FORMAT(WORK_FINISH_TM ,'%p %h시 %i분') AS WORK_FINISH_TM
+				,TR_GENDER
+				,TR_CELLNO
+				,TR_POST_CODE
+				,TR_ROAD_ADDRESS
+				,TR_DTL_ADDRESS
+				,B.CNT
+				,B.FUTURE
+		FROM   T_TRAINER A ,(SELECT COUNT(*) AS CNT,
+									SUM(START_DTM > NOW()) AS FUTURE
+								FROM t_class_schedule
+								WHERE TR_ID = #{tId}) AS B
+		WHERE A.TR_ID = #{tId};
+	</select>
+	
+	<update id="updateTrainerInfo" parameterType="hashmap">
+	/**[TRAINER_SQL.XML][egovframework.example.admin.trainer.service.impl.TrainerMapper][트레이너수정][YEJI] */
+	
+	  	UPDATE  T_TRAINER
+		SET 	TR_NM = #{tNm},
+				TR_GENDER = #{gender},
+				TR_CELLNO = #{phone_number},
+				WORK_START_TM = #{workStartTm},
+				WORK_FINISH_TM = #{workFinishTm},
+				MODIFY_DTM = now(),
+				TR_POST_CODE = #{post},
+			 	TR_ROAD_ADDRESS =#{RoadAddress},
+			 	TR_DTL_ADDRESS = #{detailAddress}
+		WHERE 	TR_ID = #{tId}	
+	
+	</update>
+</mapper>

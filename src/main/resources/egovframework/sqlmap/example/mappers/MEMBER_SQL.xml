@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.admin.member.service.impl.MemberMapper">
+
+	<!-- 조건을 걸고 그 조건에 맞는 회원목록을 최신수정회원순으로 정렬하고  해당 페이지의 해당하는 회원목록 추출   -->
+	<select id="selectMemberServiceList" parameterType="Hashmap" resultType="egovmap">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][회원목록][YEJI] */
+	SELECT CC.*
+	FROM (	
+		SELECT  BB.*
+			  , FLOOR((BB.RNUM - 1) / #{rowCnt}) +1 AS PAGE_NUMBER
+		FROM(
+			SELECT AA.*
+				  , @ROWNUM := @ROWNUM + 1 AS RNUM
+				  ,(SELECT COUNT(*)
+					FROM t_class_schedule
+					WHERE MBR_ID = AA.MBR_ID) AS TOTCNT
+				  , (SELECT SUM(START_DTM > NOW()) 
+					FROM t_class_schedule
+					WHERE MBR_ID = AA.MBR_ID)  AS FUTURE
+		  	FROM(
+					SELECT  A.MBR_ID
+						  , MBR_NM
+						  , MBR_GENDER
+						  , MBR_CELLNO
+						  , MBR_POST_CODE
+						  , MBR_ROAD_ADDRESS
+						  , MBR_DTL_ADDRESS
+						  , MBR_DESC
+						  , MBR_PT_CNT
+						  , CASE WHEN MBR_USE_YN = 'N' THEN '미사용' WHEN MBR_USE_YN = 'Y' THEN '사용' END MBR_USE_YN
+						  , MBR_JOINDT
+						  , MBR_FINISHDT
+				<![CDATA[
+						  , CASE WHEN DATEDIFF(MBR_FINISHDT, CURDATE()) <= 0 THEN '0'
+						  	WHEN DATEDIFF(MBR_FINISHDT, CURDATE()) > 0 THEN DATEDIFF(MBR_FINISHDT, CURDATE()) END MBR_DDAY 
+						  , CASE WHEN MBR_FINISHDT < CURDATE() THEN '만료'
+						  		 WHEN MBR_FINISHDT > DATE_ADD(CURDATE(), INTERVAL 5 DAY) THEN '정상'
+						  		 WHEN MBR_FINISHDT <= DATE_ADD(CURDATE(), INTERVAL 5 DAY) THEN '임박'
+						  	END MBR_STATUS 
+				  		  , MIN(B.CAB_ID) AS CAB_ID
+				  		  , COUNT(B.CAB_ID) AS CAB_CNT
+				 ]]>
+				 		  
+					FROM   T_MEMBER A LEFT JOIN T_CABINET B ON A.MBR_ID = B.MBR_ID
+						  , (SELECT @ROWNUM := 0) AS RNUM
+					WHERE  1=1
+					<choose>
+					    <when test='searchCon == "1" and searchText != ""'>
+					      AND A.MBR_ID = #{searchText}
+					    </when>
+					    <when test='searchCon == "2" and searchText != ""'>
+					      AND MBR_NM = #{searchText}
+					    </when>
+					</choose>
+					<choose>
+					    <when test='use_yn == "1"'>
+					      AND MBR_USE_YN = 'Y'
+					    </when>
+					    <when test='use_yn == "2"'>
+					      AND MBR_USE_YN = 'N'
+					    </when>
+					</choose>
+					<if test="startDate != null and !startDate.equals('')">
+					 AND MBR_JOINDT >= #{startDate}
+					</if>
+					<if test="finishDate != null and !finishDate.equals('')">
+					<![CDATA[
+					 AND MBR_FINISHDT <= #{finishDate}
+					 ]]>
+					</if>
+					<choose>
+					    <when test='status == "1"'>
+					      AND MBR_FINISHDT > DATE_ADD(CURDATE(), INTERVAL 5 DAY)
+					    </when>
+				
+					    <when test='status == "2"'>
+					    <![CDATA[
+					      AND MBR_FINISHDT <= DATE_ADD(CURDATE(), INTERVAL 5 DAY)
+					      AND CURDATE() <= MBR_FINISHDT
+					     ]]>
+					    </when>
+					    <when test='status == "3"'>
+					     <![CDATA[
+					      AND MBR_FINISHDT < CURDATE()
+					      ]]>
+					    </when>
+					</choose>
+				
+					GROUP  BY A.MBR_ID
+					ORDER BY A.MODIFY_DTM DESC
+				) AA
+		 ) BB
+	) CC WHERE PAGE_NUMBER = #{currPage};
+	 
+	</select>
+
+	
+	<select id="selectMemberListCnt" parameterType="Hashmap" resultType="String">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][회원목록갯수][YEJI] */
+	SELECT COUNT(*)
+	FROM(
+					SELECT A.MBR_ID
+					FROM   T_MEMBER A LEFT JOIN T_CABINET B ON A.MBR_ID = B.MBR_ID
+					WHERE  1=1
+					<choose>
+					    <when test='searchCon == "1" and searchText != ""'>
+					      AND A.MBR_ID = #{searchText}
+					    </when>
+					    <when test='searchCon == "2"  and searchText != ""'>
+					      AND MBR_NM = #{searchText}
+					    </when>
+					</choose>
+					<choose>
+					    <when test='use_yn == "1"'>
+					      AND MBR_USE_YN = 'Y'
+					    </when>
+					    <when test='use_yn == "2"'>
+					      AND MBR_USE_YN = 'N'
+					    </when>
+					</choose>
+					<if test="startDate != null and !startDate.equals('')">
+					 AND MBR_JOINDT >= #{startDate}
+					</if>
+					<if test="finishDate != null and !finishDate.equals('')">
+					<![CDATA[
+					 AND MBR_FINISHDT <= #{finishDate}
+					 ]]>
+					</if>
+					<choose>
+					    <when test='status == "1"'>
+					      AND MBR_FINISHDT > DATE_ADD(CURDATE(), INTERVAL 5 DAY)
+					    </when>
+				
+					    <when test='status == "2"'>
+					    <![CDATA[
+					      AND MBR_FINISHDT <= DATE_ADD(CURDATE(), INTERVAL 5 DAY)
+					      AND CURDATE() <= MBR_FINISHDT
+					     ]]>
+					    </when>
+					    <when test='status == "3"'>
+					     <![CDATA[
+					      AND MBR_FINISHDT < CURDATE()
+					      ]]>
+					    </when>
+					</choose>
+					GROUP  BY A.MBR_ID
+	) AA				
+	 
+	</select>
+	
+	<insert id="insertMember" parameterType="Hashmap">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][회원등록][YEJI] */
+			INSERT   INTO   T_MEMBER
+			(
+			   MBR_NM
+			 , MBR_GENDER
+			 , MBR_CELLNO
+			 , MBR_PT_CNT
+			 , MBR_USE_YN
+			 , MBR_JOINDT
+			 , MBR_FINISHDT
+			 , REG_DTM
+			 , MODIFY_DTM
+			 <if test="post != null">
+			 , MBR_POST_CODE
+			 , MBR_ROAD_ADDRESS
+			 </if>
+			 <if test="detailAddress != null">
+			 , MBR_DTL_ADDRESS
+			 </if>
+			 <if test="mbrDesc != null">
+			 , MBR_DESC
+			 </if>
+			)
+			VALUES
+			(
+			   #{mbrNm}
+			 , #{gender}
+			 , #{phone_number}
+			 , #{ptCnt}
+			 , #{useYN}
+			 , #{addJoinDate}
+			 , #{addFinishDate}
+			 , now()
+			 , now()
+			<if test="post != null">
+			 , #{post}
+			 , #{RoadAddress}
+			</if>
+			<if test="detailAddress != null">
+			 , #{detailAddress}
+			</if>
+			<if test="mbrDesc != null">
+			 , #{mbrDesc}
+			</if>
+			
+			)
+	</insert>
+	
+	<update id="insertCabinet" parameterType="egovMap" >
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][사물함등록][YEJI] */
+			 <selectKey keyProperty="id" resultType="int" order="BEFORE">
+   				 SELECT MBR_ID 
+   				 FROM T_MEMBER 
+   				 WHERE REG_DTM = (SELECT MAX(REG_DTM)
+								  FROM t_member) 
+  			</selectKey>
+			
+			UPDATE T_CABINET
+			   SET	 CAB_USE_YN = 'Y'
+			   		, MBR_ID = #{id}
+					, CAB_REG_DT = #{cabSDate}
+					, CAB_FINISH_DT = #{cabFDate}
+					, REG_DTM = now()
+					, MODIFY_DTM = now()
+			WHERE CAB_ID = #{cabId}
+	</update>
+	
+	<!-- 가장 최근에 등록된 회원의 Id를 가져온다 -->
+	<select id="selectLastRegMbr" resultType="String">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][최근에등록된회원번호][YEJI] */
+			 SELECT MBR_ID 
+   			 FROM T_MEMBER 
+   			 WHERE REG_DTM = (SELECT MAX(REG_DTM)
+								  FROM t_member)
+	</select>
+	
+	<select id="selectMemberInfo" parameterType="String" resultType="egovmap">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][회원정보][YEJI] */
+	
+		SELECT MBR_ID
+			  , MBR_NM
+			  , MBR_GENDER
+			  , MBR_CELLNO
+			  , MBR_POST_CODE
+			  , MBR_ROAD_ADDRESS
+			  , MBR_DTL_ADDRESS
+			  , MBR_DESC
+			  , MBR_PT_CNT
+			  , CASE WHEN MBR_USE_YN = 'N' THEN '미사용' WHEN MBR_USE_YN = 'Y' THEN '사용' END MBR_USE_YN
+			  , MBR_JOINDT
+			  , MBR_FINISHDT
+	<![CDATA[
+			  , CASE WHEN DATEDIFF(MBR_FINISHDT, CURDATE()) <= 0 THEN '0'
+			  	WHEN DATEDIFF(MBR_FINISHDT, CURDATE()) > 0 THEN DATEDIFF(MBR_FINISHDT, CURDATE()) END MBR_DDAY 
+			  , CASE WHEN MBR_FINISHDT < CURDATE() THEN '만료'
+			  		 WHEN MBR_FINISHDT > DATE_ADD(CURDATE(), INTERVAL 5 DAY) THEN '정상'
+			  		 WHEN MBR_FINISHDT <= DATE_ADD(CURDATE(), INTERVAL 5 DAY) THEN '임박'
+			  	END MBR_STATUS 
+	 ]]>
+				 		  
+		FROM   T_MEMBER ,(SELECT SUM(START_DTM > NOW()) 
+						 	FROM t_class_schedule
+						   WHERE mbr_id = #{mbr_id}) AS FUTURE
+		WHERE  mbr_id = #{mbr_id}		
+	 
+	</select>
+	
+	<select id="selectCabinetInfo" parameterType="String" resultType="EgovMap">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][사물함정보][YEJI] */
+	
+		SELECT CAB_ID 
+			  ,CAB_REG_DT 
+			  ,CAB_FINISH_DT 
+		FROM   T_CABINET 
+		WHERE  MBR_ID = #{mbr_id}		
+	 
+	</select>
+	
+	<update id="deleteCabinet" parameterType="String">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][사물함삭제][YEJI] */
+	
+		UPDATE t_cabinet
+		SET 	CAB_USE_YN = 'N',
+				CAB_REG_DT = null,
+				CAB_FINISH_DT= null,
+				MBR_ID = null,
+				REG_DTM = now(),
+				MODIFY_DTM = now()
+		WHERE 	MBR_ID = #{mbr_id}		
+	 
+	</update>
+	
+	<delete  id="deleteMember" parameterType="String" >
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][회원정보삭제][YEJI] */
+	
+		DELETE FROM T_MEMBER
+		WHERE MBR_ID = #{mbr_id}		
+	 
+	</delete >
+	
+	<select id="cabinetUseChkService" parameterType="String" resultType="String">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][사물함사용여부][YEJI] */
+	
+		SELECT CAB_USE_YN
+		FROM T_CABINET
+		WHERE CAB_ID = #{cabId}		
+	 
+	</select>
+	
+	<update id="updateMember" parameterType="hashmap" >
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][회원수정][YEJI] */
+	
+		UPDATE T_MEMBER
+		SET 	MBR_NM = #{mbrNm},
+				MBR_GENDER = #{gender},
+				MBR_CELLNO = #{phone_number},
+				MBR_PT_CNT = #{ptCnt},
+				MBR_USE_YN = #{useYN},
+				MBR_JOINDT = #{updateJoinDate},
+				MBR_FINISHDT = #{updateFinishDate},
+				REG_DTM = now(),
+				MODIFY_DTM = now(),
+				MBR_POST_CODE = #{post},
+			 	MBR_ROAD_ADDRESS =#{RoadAddress},
+			 	MBR_DTL_ADDRESS = #{detailAddress},
+			 	MBR_DESC = #{mbrDesc}
+		WHERE 	MBR_ID = #{mbrId}	
+	 
+	</update>
+	
+	<update id="updateCabinet" parameterType="egovmap" >
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][사물함수정][YEJI] */
+	
+		UPDATE T_CABINET
+			   SET	 CAB_USE_YN = 'Y'
+					, MBR_ID = #{mbrId}
+					, CAB_REG_DT = #{cabStartDate}
+					, CAB_FINISH_DT = #{cabFinishDate}
+					, REG_DTM = now()
+					, MODIFY_DTM = now()
+			WHERE CAB_ID = #{cabId}
+	 
+	</update>
+	
+	<select id="selectScheduleInfo" parameterType="hashmap" resultType="EgovMap">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][일정정보][YEJI] */
+	
+	SELECT CC.*
+	FROM (	
+		SELECT  BB.*
+			  , FLOOR((BB.RNUM - 1) / 5) +1 AS PAGE_NUMBER
+		FROM(
+			SELECT AA.*
+				  , @ROWNUM := @ROWNUM + 1 AS RNUM
+			FROM	(SELECT TR_ID 
+						  ,PT_CODE 
+						  ,START_DTM 
+						  ,FINISH_DTM 
+						  ,MNG_NO
+				  	<![CDATA[
+						  , CASE WHEN DATE_ADD(START_DTM, INTERVAL PT_CODE MINUTE) < CURDATE() THEN '종료'
+						  		 WHEN START_DTM > CURDATE() THEN '예정'
+						  		 WHEN DATE_ADD(START_DTM, INTERVAL PT_CODE MINUTE) >= CURDATE() AND START_DTM <= CURDATE() THEN '진행중'
+						  	END STATUS 
+					]]>
+					FROM   t_class_schedule 
+						  , (SELECT @ROWNUM := 0) AS RNUM
+					WHERE  MBR_ID = #{rowMbrId}) AA	
+	 		) BB
+	 	) CC WHERE PAGE_NUMBER = #{pageNum};
+	</select>
+	
+	<select id="selectScheduleInfoCnt" parameterType="hashmap" resultType="string">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][일정정보갯수][YEJI] */
+		
+		SELECT COUNT(*)
+		FROM   t_class_schedule
+		WHERE  MBR_ID = #{rowMbrId}	
+					
+	</select>
+	
+	<select id="selectDailyLogService" parameterType="string" resultType="string">
+	/**[MEMBER_SQL.XML][egovframework.example.admin.member.service.impl.MemberMapper][수업일지][YEJI] */
+	
+		SELECT DAILY_LOG
+		FROM   t_class_schedule
+		WHERE  MNG_NO = #{mngNo}	
+					
+	</select>
+</mapper>
