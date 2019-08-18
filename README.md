@@ -1,5 +1,7 @@
 # GymManager
 
+유투브 영상 -> https://www.youtube.com/watch?v=rpMp_8iAnmU&feature=youtu.be
+
 헬스장 관리 프로그램 
  
   < 개발 환경 >
